@@ -18,3 +18,56 @@ body {
   background-attachment: fixed;
   color: #ffffff;
 }
+
+.hero {
+  height: 100vh;
+  background: radial-gradient(circle at 20% 20%, #0a1a3a, #020617);
+  position: relative;
+}
+
+/* Islamic pattern overlay */
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  /* Using a placeholder arabesque pattern. Replace with url('/islamic-pattern.png') if you have the file in the public folder */
+  background: url('https://www.transparenttextures.com/patterns/arabesque.png');
+  opacity: 0.08;
+  pointer-events: none;
+}
+
+/* Slider Text Animation */
+.slider-container {
+  height: 1.2em;
+  overflow: hidden;
+  display: inline-block;
+  vertical-align: bottom;
+}
+
+.slider-text {
+  display: flex;
+  flex-direction: column;
+  animation: slide-text 8s infinite cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.slider-text span {
+  height: 1.2em;
+  line-height: 1.2em;
+}
+
+@keyframes slide-text {
+  0%, 20% { transform: translateY(0); }
+  33%, 53% { transform: translateY(-25%); }
+  66%, 86% { transform: translateY(-50%); }
+  100% { transform: translateY(-75%); }
+}
+
+/* Icon Wiggle Animation */
+@keyframes wiggle-icon {
+  0%, 100% { transform: rotate(-10deg) scale(1); }
+  50% { transform: rotate(10deg) scale(1.1); }
+}
+
+.animate-wiggle-icon {
+  animation: wiggle-icon 1s infinite ease-in-out;
+}
