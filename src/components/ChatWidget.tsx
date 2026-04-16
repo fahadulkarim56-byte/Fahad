@@ -1,11 +1,26 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send } from 'lucide-react';
+import { MessageCircle, X, Send, Mail } from 'lucide-react';
+import { GoogleGenAI, Type, FunctionDeclaration } from '@google/genai';
 
 interface Message {
   id: string;
   text: string;
   isBot: boolean;
+  type?: 'text' | 'contact_options' | 'contact_form';
+  formMethod?: 'whatsapp' | 'email';
 }
+
+// Initialize Gemini API
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+const showContactOptionsDeclaration: FunctionDeclaration = {
+  name: "showContactOptions",
+  description: "Show options for the user to contact the human admin via WhatsApp or Email. Call this ONLY when the user explicitly asks to place an order, hire the agency, or speak to a human.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {},
+  },
+};
 
 export default function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
@@ -13,6 +28,7 @@ export default function ChatWidget() {
   const [messages, setMessages] = useState<Message[]>([
     { id: '1', text: '👋 Assalamu Alaikum! How can I help you?', isBot: true }
   ]);
+  const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const toggleChat = () => setIsOpen(!isOpen);
@@ -25,25 +41,99 @@ export default function ChatWidget() {
     if (isOpen) {
       scrollToBottom();
     }
-  }, [messages, isOpen]);
+  }, [messages, isOpen, isTyping]);
 
-  const sendMessage = (e?: React.FormEvent) => {
+  const handleSelectContact = (method: 'whatsapp' | 'email') => {
+    setMessages(prev => [...prev, 
+      { id: Date.now().toString(), text: `I want to proceed with ${method === 'whatsapp' ? 'WhatsApp' : 'Email'}.`, isBot: false },
+      { id: (Date.now() + 1).toString(), text: "Great! Please provide your details below:", isBot: true, type: 'contact_form', formMethod: method }
+    ]);
+  };
+
+  const handleChatWhatsAppSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const name = formData.get('Name') as string;
+    const address = formData.get('Address') as string;
+    const details = formData.get('Details') as string;
+
+    const message = `New Inquiry from Chat:\n\nName: ${name}\nAddress: ${address}\nDetails: ${details}`;
+    const whatsappUrl = `https://wa.me/8801889515357?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+
+    setMessages(prev => [...prev, { id: Date.now().toString(), text: "Your message has been prepared in WhatsApp! We will get back to you soon.", isBot: true }]);
+  };
+
+  const sendMessage = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!input.trim()) return;
 
+    const userText = input.trim();
+    
     // Add user message
-    const newUserMsg: Message = { id: Date.now().toString(), text: input, isBot: false };
+    const newUserMsg: Message = { id: Date.now().toString(), text: userText, isBot: false };
     setMessages(prev => [...prev, newUserMsg]);
     setInput('');
+    setIsTyping(true);
 
-    // Simulate bot response
-    setTimeout(() => {
+    try {
+      // Build conversation history for context
+      const chatHistory = messages.map(msg => `${msg.isBot ? 'Junior Admin' : 'Customer'}: ${msg.text}`).join('\n');
+      const prompt = `
+You are "Junior Admin", a helpful customer support assistant for Fahad's creative agency.
+The agency provides: Graphic Design (including Poster Design), Video Editing, and Digital Marketing services (including Social Media Kits).
+
+CRITICAL INSTRUCTIONS:
+1. You MUST reply in the exact same language the customer uses (e.g., Bengali, English, Hindi).
+2. First, answer their questions and provide detailed information about our services to the best of your ability.
+3. DO NOT offer contact options immediately. Wait until the customer has explained their needs or asked their questions.
+4. ONLY call the "showContactOptions" function IF the customer explicitly asks how to contact you, how to place an order, or says they are ready to proceed/hire you. Do not ask for their details directly; let the function handle it.
+
+Conversation history:
+${chatHistory}
+Customer: ${userText}
+Junior Admin:`;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: prompt,
+        config: {
+          tools: [{ functionDeclarations: [showContactOptionsDeclaration] }],
+          temperature: 0.7,
+        }
+      });
+
+      if (response.functionCalls && response.functionCalls.length > 0) {
+        const call = response.functionCalls[0];
+        if (call.name === 'showContactOptions') {
+          setMessages(prev => [...prev, { 
+            id: Date.now().toString(), 
+            text: "Please choose how you would like to proceed:", 
+            isBot: true,
+            type: 'contact_options'
+          }]);
+          setIsTyping(false);
+          return;
+        }
+      }
+
+      const botText = response.text || "I'm sorry, I couldn't process that right now. Please try again or contact us via WhatsApp.";
+      
       setMessages(prev => [...prev, { 
         id: Date.now().toString(), 
-        text: "Thanks for reaching out! A human admin will get back to you shortly.", 
+        text: botText.trim(), 
         isBot: true 
       }]);
-    }, 1000);
+    } catch (error) {
+      console.error("Error calling Gemini API:", error);
+      setMessages(prev => [...prev, { 
+        id: Date.now().toString(), 
+        text: "Sorry, I am having trouble connecting right now. Please contact us via WhatsApp.", 
+        isBot: true 
+      }]);
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   return (
@@ -74,8 +164,41 @@ export default function ChatWidget() {
                 }`}
               >
                 {msg.text}
+                
+                {msg.type === 'contact_options' && (
+                  <div className="flex flex-col gap-2 mt-3">
+                    <button onClick={() => handleSelectContact('whatsapp')} className="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-colors">
+                      <MessageCircle className="w-4 h-4" /> WhatsApp
+                    </button>
+                    <button onClick={() => handleSelectContact('email')} className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg font-bold flex items-center justify-center gap-2 transition-colors">
+                      <Mail className="w-4 h-4" /> Email
+                    </button>
+                  </div>
+                )}
+
+                {msg.type === 'contact_form' && (
+                  <form 
+                    action={msg.formMethod === 'email' ? "https://formspree.io/f/fahadulkarim56@gmail.com" : undefined}
+                    method={msg.formMethod === 'email' ? "POST" : undefined}
+                    onSubmit={msg.formMethod === 'whatsapp' ? handleChatWhatsAppSubmit : undefined}
+                    className="flex flex-col gap-2 mt-3"
+                  >
+                    <input type="hidden" name="_subject" value="New Inquiry from Chat Widget" />
+                    <input type="text" name="Name" placeholder="Your Name" required className="bg-black/20 border border-white/10 rounded p-2 text-white placeholder:text-white/50 focus:outline-none focus:border-blue-500" />
+                    <input type="text" name="Address" placeholder="Your Address" required className="bg-black/20 border border-white/10 rounded p-2 text-white placeholder:text-white/50 focus:outline-none focus:border-blue-500" />
+                    <textarea name="Details" placeholder="Description of needs" required rows={3} className="bg-black/20 border border-white/10 rounded p-2 text-white placeholder:text-white/50 focus:outline-none focus:border-blue-500 resize-none" />
+                    <button type="submit" className={`py-2 px-4 rounded-lg font-bold text-white transition-colors mt-1 ${msg.formMethod === 'whatsapp' ? 'bg-green-500 hover:bg-green-600' : 'bg-blue-500 hover:bg-blue-600'}`}>
+                      {msg.formMethod === 'whatsapp' ? 'Send to WhatsApp' : 'Send via Email'}
+                    </button>
+                  </form>
+                )}
               </div>
             ))}
+            {isTyping && (
+              <div className="bg-white/[0.08] text-white/60 self-start rounded-2xl rounded-tl-sm border border-white/[0.05] p-3 text-sm flex items-center gap-1">
+                <span className="animate-bounce">.</span><span className="animate-bounce" style={{ animationDelay: '0.2s' }}>.</span><span className="animate-bounce" style={{ animationDelay: '0.4s' }}>.</span>
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </div>
 
@@ -86,11 +209,13 @@ export default function ChatWidget() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Type a message..." 
-              className="flex-1 bg-white/5 border border-white/10 rounded-full px-4 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-blue-500 focus:bg-white/[0.08] transition-all"
+              disabled={isTyping}
+              className="flex-1 bg-white/5 border border-white/10 rounded-full px-4 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-blue-500 focus:bg-white/[0.08] transition-all disabled:opacity-50"
             />
             <button 
               type="submit"
-              className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-full transition-colors flex items-center justify-center shrink-0 shadow-[0_2px_10px_rgba(59,130,246,0.3)]"
+              disabled={isTyping || !input.trim()}
+              className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-500/50 text-white p-2 rounded-full transition-colors flex items-center justify-center shrink-0 shadow-[0_2px_10px_rgba(59,130,246,0.3)]"
             >
               <Send className="w-4 h-4 ml-0.5" />
             </button>

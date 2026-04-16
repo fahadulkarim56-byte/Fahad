@@ -21,18 +21,36 @@ body {
 
 .hero {
   height: 100vh;
-  background: radial-gradient(circle at 20% 20%, #0a1a3a, #020617);
+  background-color: #020617;
   position: relative;
 }
 
-/* Islamic pattern overlay */
-.hero::before {
+/* Islamic pattern overlay (dynamic background will be applied inline) */
+.hero-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  opacity: 0.6;
+  pointer-events: none;
+  transition: background-image 1.5s ease-in-out;
+}
+
+.hero-bg::before {
   content: "";
   position: absolute;
   inset: 0;
-  /* Using a placeholder arabesque pattern. Replace with url('/islamic-pattern.png') if you have the file in the public folder */
+  background-image: linear-gradient(to bottom, rgba(2, 6, 23, 0.7), rgba(2, 6, 23, 0.95));
+}
+
+/* Add a subtle geometric pattern on top */
+.hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
   background: url('https://www.transparenttextures.com/patterns/arabesque.png');
-  opacity: 0.08;
+  opacity: 0.15;
   pointer-events: none;
 }
 
@@ -53,6 +71,7 @@ body {
 .slider-text span {
   height: 1.2em;
   line-height: 1.2em;
+  white-space: nowrap;
 }
 
 @keyframes slide-text {

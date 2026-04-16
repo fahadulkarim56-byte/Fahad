@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { MessageCircle, Mail } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -6,14 +6,36 @@ interface PageProps {
   openOrderModal: (service: string) => void;
 }
 
+const BACKGROUND_IMAGES = [
+  'https://images.unsplash.com/photo-1584551246679-0daf3d275d0f?q=80&w=2000&auto=format&fit=crop',
+  'https://images.unsplash.com/photo-1564683214965-3619addd900d?q=80&w=2000&auto=format&fit=crop',
+  'https://images.unsplash.com/photo-1542816417-0983c9c9ad53?q=80&w=2000&auto=format&fit=crop',
+  'https://images.unsplash.com/photo-1519817914152-2a640c047663?q=80&w=2000&auto=format&fit=crop'
+];
+
 export default function Home({ openOrderModal }: PageProps) {
+  const [currentBgIndex, setCurrentBgIndex] = useState(0);
+
+  useEffect(() => {
+    // Change background every 1 minute (60000 ms)
+    const interval = setInterval(() => {
+      setCurrentBgIndex((prevIndex) => (prevIndex + 1) % BACKGROUND_IMAGES.length);
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <>
       {/* Hero Section */}
       <section className="hero flex flex-col justify-center items-center text-center px-4 pt-20 z-10 overflow-hidden">
+        <div 
+          className="hero-bg" 
+          style={{ backgroundImage: `url('${BACKGROUND_IMAGES[currentBgIndex]}')` }}
+        />
         <div className="relative z-10 flex flex-col items-center">
           {/* Slider Text */}
-          <h1 className="text-5xl md:text-[64px] font-extrabold mb-8 tracking-[-2px] text-blue-500 slider-container">
+          <h1 className="text-4xl sm:text-5xl md:text-[64px] font-extrabold mb-8 tracking-[-2px] text-blue-500 slider-container max-w-[100vw] px-2">
             <div className="slider-text">
               <span>Graphic Design</span>
               <span>Video Editing</span>
